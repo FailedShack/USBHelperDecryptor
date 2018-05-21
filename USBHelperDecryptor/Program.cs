@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.IO.Compression;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -9,50 +8,100 @@ namespace USBHelperDecryptor
 {
     class Program
     {
+        private static readonly string[] V4 = new string[] { "Xl5CTkNKSE/CqMK1b2QyNg==", "Z15tYmtsIHR5XmwqZirCow==" };
+        private static readonly string[] V6 = new string[] { "Z1be2dJkvBExY7b5tmLpVg==", "Z1be2dJkvBExY7b5tmLpVg==" };
+
         static void Main(string[] args)
         {
-            if (args.Length == 0)
+            if (args.Length != 3)
             {
-                Console.WriteLine("Usage: USBHelperDecryptor.exe <datav4 file>");
+                Console.WriteLine("Usage: USBHelperDecryptor.exe <encrypt or decrypt> <v4 or v6> <data file>");
                 return;
             }
+            string extension;
+            bool decrypt;
+            switch (args[0].ToLower())
+            {
+                case "encrypt":
+                    decrypt = false;
+                    extension = "enc";
+                    break;
+                case "decrypt":
+                    decrypt = true;
+                    extension = "zip";
+                    break;
+                default:
+                    Console.WriteLine("Error: Invalid mode, use encrypt or decrypt.");
+                    return;
+            }
+            string[] key;
+            switch (args[1].ToLower())
+            {
+                case "v4":
+                    key = V4;
+                    break;
+                case "v6":
+                    key = V6;
+                    break;
+                default:
+                    Console.WriteLine("Error: Invalid version, use v4 or v6.");
+                    return;
+            }
             string path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            string file = Path.Combine(path, args[0]);
+            string file = Path.Combine(path, args[2]);
             if (!File.Exists(file))
             {
                 Console.WriteLine("Error: File not found.");
                 return;
             }
             MemoryStream stream = new MemoryStream(File.ReadAllBytes(file));
-            MemoryStream decrypted;
-            ZipArchive archive;
+            MemoryStream output;
             try
             {
-                decrypted = DecryptArchive(stream);
-                archive = new ZipArchive(decrypted);
+                output = AesCrypt(stream, Convert.FromBase64String(key[0]), Convert.FromBase64String(key[1]), decrypt);
             }
-            catch (Exception)
+            catch (CryptographicException e)
             {
-                Console.WriteLine("Invalid datav4 file.");
+                Console.WriteLine("Error: An exception occurred while processing the file.\n" + e.Message);
                 return;
             }
-            Console.WriteLine("Archive decrypted successfully, contains " + archive.Entries.Count + " files.");
-            string decryptedFile = Path.GetFileNameWithoutExtension(args[0]) + "_decrypted.zip";
-            File.WriteAllBytes(Path.Combine(path, decryptedFile), decrypted.ToArray());
-            Console.WriteLine("Decrypted contents written to " + decryptedFile);
+            string fileName = Path.GetFileNameWithoutExtension(args[2]);
+            string decryptedFile;
+            int i = 0;
+            do
+            {
+                StringBuilder sb = new StringBuilder(fileName);
+                if (i != 0)
+                {
+                    sb.Append("(" + i + ")");
+                }
+                sb.Append('.').Append(extension);
+                decryptedFile = sb.ToString();
+                i++;
+            }
+            while (File.Exists(Path.Combine(path, decryptedFile)));
+            try
+            {
+                File.WriteAllBytes(Path.Combine(path, decryptedFile), output.ToArray());
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Error: An exception occurred while writing the file.\n" + e.Message);
+                return;
+            }
+            Console.WriteLine("Success: Processed file written to " + decryptedFile);
         }
 
-        // Key taken from NusHelper.dll in Wii U USB Helper GO! APK
-        private static MemoryStream DecryptArchive(MemoryStream source)
+        private static MemoryStream AesCrypt(MemoryStream source, byte[] key, byte[] iv, bool decrypt)
         {
             MemoryStream memoryStream = new MemoryStream();
-            using (AesCryptoServiceProvider cryptoServiceProvider = new AesCryptoServiceProvider())
+            using (AesCryptoServiceProvider aes = new AesCryptoServiceProvider())
             {
-                cryptoServiceProvider.Mode = CipherMode.CBC;
-                cryptoServiceProvider.Key = Encoding.UTF8.GetBytes("^^BNCJHO¨µod26");
-                cryptoServiceProvider.IV = Encoding.UTF8.GetBytes("g^mbkl ty^l*f*£");
+                aes.Mode = CipherMode.CBC;
+                aes.Key = key;
+                aes.IV = iv;
                 byte[] buffer = new byte[512];
-                using (CryptoStream cryptoStream = new CryptoStream(source, cryptoServiceProvider.CreateDecryptor(), CryptoStreamMode.Read))
+                using (CryptoStream cryptoStream = new CryptoStream(source, decrypt ? aes.CreateDecryptor() : aes.CreateEncryptor(), CryptoStreamMode.Read))
                 {
                     int count;
                     do
