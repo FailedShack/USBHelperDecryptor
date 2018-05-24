@@ -9,7 +9,7 @@ namespace USBHelperDecryptor
     class Program
     {
         private static readonly string[] V4 = new string[] { "Xl5CTkNKSE/CqMK1b2QyNg==", "Z15tYmtsIHR5XmwqZirCow==" };
-        private static readonly string[] V6 = new string[] { "Z1be2dJkvBExY7b5tmLpVg==", "Z1be2dJkvBExY7b5tmLpVg==" };
+        private static readonly string[] V6 = new string[] { "Z1be2dJkvBExY7b5tmLpVg==", "+hIiiu0yrVfpQJW9SnpcHg==" };
 
         static void Main(string[] args)
         {
